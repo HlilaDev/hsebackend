@@ -96,7 +96,7 @@ exports.updateDevice = async (req, res) => {
     if (description !== undefined) update.description = description;
 
     const device = await Device.findByIdAndUpdate(req.params.id, update, {
-      new: true,
+      returnDocument: "after",
       runValidators: true
     });
 

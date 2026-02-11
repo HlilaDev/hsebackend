@@ -13,16 +13,20 @@ const client = mqtt.connect(process.env.MQTT_BROKER_URL, mqttOptions);
 
 client.on("connect", () => {
   console.log("🚀 MQTT connected");
-  client.subscribe("sensors/#", { qos: 1 });
+  client.subscribe("hse/#", { qos: 1 });
 });
 
 client.on("message", async (topic, payload, packet) => {
+  const raw = payload.toString();
+  console.log("📩 MQTT IN:", topic, "=>", raw);
+
   try {
     await mqttHandler(topic, payload, packet);
   } catch (err) {
     console.error("❌ MQTT handler error:", err.message);
   }
 });
+
 
 client.on("error", (err) => {
   console.error("❌ MQTT error:", err.message);

@@ -4,12 +4,29 @@ const Reading = require("../models/readingModel");
 const parsers = require("./parsers");
 
 function safeParse(payload) {
-  try {
-    return JSON.parse(payload.toString());
-  } catch {
-    return { value: payload.toString() };
+  const s = payload.toString().trim();
+
+  // JSON normal
+  if (s.startsWith("{") || s.startsWith("[")) {
+    try {
+      return JSON.parse(s);
+    } catch {
+      return { value: s };
+    }
   }
+
+  // format "temperature=16.6" ou "humidity=55.1" ou "temperature:16.6,humidity:55"
+  const obj = {};
+  for (const part of s.split(/[;,]+/)) {
+    const [k, v] = part.split(/[:=]/).map(x => x && x.trim());
+    if (k && v) obj[k] = v;
+  }
+  if (Object.keys(obj).length > 0) return obj;
+
+  // sinon brut
+  return { value: s };
 }
+
 
 module.exports = async function mqttHandler(topic, payload) {
   // sensors/{deviceId}/{sensorType}
@@ -32,7 +49,7 @@ module.exports = async function mqttHandler(topic, payload) {
   const device = await Device.findOneAndUpdate(
     { deviceId },
     { status: "online", lastSeen: new Date() },
-    { new: true }
+    { returnDocument: "after" }
   );
 
   if (!device) {
@@ -41,7 +58,7 @@ module.exports = async function mqttHandler(topic, payload) {
   }
 
   await Reading.create({
-    deviceId,
+    device: device._id,   
     zone: device.zone,
     sensorType,
     values,

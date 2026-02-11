@@ -68,7 +68,7 @@ exports.updateZone = async (req, res) => {
         ...(name ? { name: name.trim() } : {}),
         ...(description !== undefined ? { description } : {})
       },
-      { new: true, runValidators: true }
+      { returnDocument: "after", runValidators: true }
     );
 
     if (!zone) return res.status(404).json({ message: "Zone not found" });

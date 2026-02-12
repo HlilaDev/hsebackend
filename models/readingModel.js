@@ -25,7 +25,8 @@ const readingSchema = new mongoose.Schema(
     ts: {
       type: Date,
       default: Date.now,
-      index: true
+      index: true,
+      expires: 60 * 60 * 24 * 7   // sefface automatiquemeent apres 7 jours
     },
 
     values: {

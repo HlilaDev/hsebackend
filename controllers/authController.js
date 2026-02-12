@@ -14,11 +14,13 @@ const signToken = (user) => {
 // POST /api/auth/register
 exports.register = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { firstName, lastName, email, password, role } = req.body;
 
     // Basic validation
-    if (!name || !email || !password) {
-      return res.status(400).json({ message: "name, email, password are required" });
+    if (!firstName || !lastName || !email || !password) {
+      return res.status(400).json({
+        message: "firstName, lastName, email, password are required"
+      });
     }
 
     // Check existing user
@@ -33,19 +35,22 @@ exports.register = async (req, res) => {
 
     // Create user
     const user = await User.create({
-      name,
+      firstName,
+      lastName,
       email,
       password: hashed,
-      role: role || "user"
+      role: role || "operator"
     });
 
     // Create token
     const token = signToken(user);
 
-    // Do not return password
+    // Safe user (no password)
     const safeUser = {
       _id: user._id,
-      name: user.name,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      fullName: user.fullName, // virtual
       email: user.email,
       role: user.role,
       createdAt: user.createdAt
@@ -67,8 +72,8 @@ exports.login = async (req, res) => {
       return res.status(400).json({ message: "email and password are required" });
     }
 
-    // Find user
-    const user = await User.findOne({ email });
+    // Find user (IMPORTANT: password is select:false in schema)
+    const user = await User.findOne({ email }).select("+password");
     if (!user) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
@@ -84,7 +89,9 @@ exports.login = async (req, res) => {
 
     const safeUser = {
       _id: user._id,
-      name: user.name,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      fullName: user.fullName,
       email: user.email,
       role: user.role
     };

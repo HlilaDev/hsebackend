@@ -1,3 +1,4 @@
+// controllers/authController.js
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/userModel");
@@ -11,6 +12,15 @@ const signToken = (user) => {
   );
 };
 
+// Cookie options (DEV friendly)
+// ⚠️ In PROD over HTTPS + different domain => sameSite:"none" and secure:true
+const cookieOptions = {
+  httpOnly: true,
+  sameSite: "lax",
+  secure: false,
+  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+};
+
 // POST /api/auth/register
 exports.register = async (req, res) => {
   try {
@@ -19,7 +29,7 @@ exports.register = async (req, res) => {
     // Basic validation
     if (!firstName || !lastName || !email || !password) {
       return res.status(400).json({
-        message: "firstName, lastName, email, password are required"
+        message: "firstName, lastName, email, password are required",
       });
     }
 
@@ -39,11 +49,12 @@ exports.register = async (req, res) => {
       lastName,
       email,
       password: hashed,
-      role: role || "operator"
+      role: role || "operator",
     });
 
-    // Create token
+    // Create token + set cookie
     const token = signToken(user);
+    res.cookie("access_token", token, cookieOptions);
 
     // Safe user (no password)
     const safeUser = {
@@ -53,10 +64,10 @@ exports.register = async (req, res) => {
       fullName: user.fullName, // virtual
       email: user.email,
       role: user.role,
-      createdAt: user.createdAt
+      createdAt: user.createdAt,
     };
 
-    return res.status(201).json({ token, user: safeUser });
+    return res.status(201).json({ user: safeUser });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -72,7 +83,7 @@ exports.login = async (req, res) => {
       return res.status(400).json({ message: "email and password are required" });
     }
 
-    // Find user (IMPORTANT: password is select:false in schema)
+    // Find user (password is select:false in schema)
     const user = await User.findOne({ email }).select("+password");
     if (!user) {
       return res.status(401).json({ message: "Invalid credentials" });
@@ -84,8 +95,9 @@ exports.login = async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    // Token
+    // Token + cookie
     const token = signToken(user);
+    res.cookie("access_token", token, cookieOptions);
 
     const safeUser = {
       _id: user._id,
@@ -93,11 +105,27 @@ exports.login = async (req, res) => {
       lastName: user.lastName,
       fullName: user.fullName,
       email: user.email,
-      role: user.role
+      role: user.role,
     };
 
-    return res.status(200).json({ token, user: safeUser });
+    return res.status(200).json({ user: safeUser });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
+};
+
+// POST /api/auth/logout
+exports.logout = (req, res) => {
+  res.clearCookie("access_token", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: false,
+  });
+  return res.status(200).json({ message: "Logged out" });
+};
+
+// GET /api/auth/me  (requires protect middleware to set req.user)
+exports.me = async (req, res) => {
+  // If you use the protect middleware, you can just return req.user
+  return res.status(200).json({ user: req.user });
 };

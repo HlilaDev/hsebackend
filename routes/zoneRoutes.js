@@ -17,7 +17,7 @@ router.get("/:id", zoneController.getZoneById);
 
 
 // 🔹 UPDATE ZONE (general info)
-router.patch("/:id", zoneController.updateZone);
+router.put("/:id", zoneController.updateZone);
 
 
 // 🔹 UPDATE PPE RULES + ROI (incrément configVersion)

@@ -10,6 +10,12 @@ const incidentEventRoutes = require("./incidentEventRoutes");
 const reportRoutes = require("./reportRoutes");
 const employeeRoutes = require("./employeeRoutes");
 const trainingRoutes = require("./trainingRoutes");
+const sensorsRoutes = require("./sensorRoutes");
+const sensorDataRoutes = require("./sensorDataRoutes");
+const auditRoutes = require("./auditRoutes");
+const alertRoutes = require("./alertRoutes");
+const alertRuleRoutes = require("./alertRuleRoutes");
+const notificationRoutes = require('./notificationRoutes');
 
 router.use("/users", userRoutes);
 router.use("/auth", authRoutes);
@@ -20,6 +26,15 @@ router.use("/incidentEvents", incidentEventRoutes);
 router.use("/reports", reportRoutes);
 router.use("/employees", employeeRoutes);
 router.use("/trainings", trainingRoutes);
+router.use("/audits", auditRoutes);
+router.use("/alerts", alertRoutes);
+router.use("/alert-rules", alertRuleRoutes);
+router.use('/notifications', notificationRoutes);
+
+
+router.use("/sensors", sensorsRoutes);
+router.use("/sensor-data", sensorDataRoutes);
+router.use("/readings", require("./readingRoutes"));
 
 module.exports = router;
 

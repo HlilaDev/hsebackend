@@ -21,6 +21,11 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       trim: true
     },
+        company: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Company",
+      required: false
+    },
 
     password: {
       type: String,
@@ -30,8 +35,8 @@ const userSchema = new mongoose.Schema(
 
     role: {
       type: String,
-      enum: ["operator", "hseManager", "admin"],
-      default: "operator"
+      enum: ["agent", "hseManager", "admin"],
+      default: "agent"
     }
   },
   {

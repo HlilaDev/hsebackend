@@ -1,5 +1,8 @@
 const Device = require("../models/deviceModel");
 const Zone = require("../models/zoneModel");
+const Sensor = require("../models/sensorModel");
+const { publishDeviceCommand } = require("../mqtt/mqttHandler");
+
 
 
 // CREATE: POST /api/devices
@@ -42,7 +45,7 @@ exports.getDevices = async (req, res) => {
     if (zone) q.zone = zone;
     if (status) q.status = status;
 
-    const devices = await Device.find(q).sort({ createdAt: -1 });
+    const devices = await Device.find(q).sort({ createdAt: -1 }).populate('zone', '_id name');
     return res.status(200).json(devices);
   } catch (e) {
     return res.status(500).json({ message: e.message });
@@ -115,5 +118,46 @@ exports.deleteDevice = async (req, res) => {
     return res.status(200).json({ message: "Device deleted" });
   } catch (e) {
     return res.status(500).json({ message: e.message });
+  }
+};
+
+
+exports.getDeviceSensors = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const device = await Device.findById(id).lean();
+    if (!device) return res.status(404).json({ message: "Device not found" });
+
+    // ✅ Nouveau: sensor pointe vers device (ObjectId)
+    const sensors = await Sensor.find({ device: id })
+      .select("name device type status unit threshold zone createdAt lastSeen")
+      .populate("zone", "name")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return res.json({ items: sensors });
+  } catch (e) {
+    return res.status(500).json({ message: e.message });
+  }
+};
+
+
+exports.restartDevice = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await publishDeviceCommand(id, "restart");
+
+    return res.status(200).json({
+      message: "Restart command sent successfully",
+      topic: result.topic,
+      command: result.message,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Failed to send restart command",
+      error: error.message,
+    });
   }
 };

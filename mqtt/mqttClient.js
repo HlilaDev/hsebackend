@@ -1,6 +1,6 @@
 // mqtt/mqttClient.js
 const mqtt = require("mqtt");
-const mqttHandler = require("./mqttHandler");
+const { mqttHandler } = require("./mqttHandler");
 
 const mqttOptions = {
   clientId: "hse-mqtt-client-" + Math.random().toString(16).substr(2, 8),
@@ -13,7 +13,7 @@ const client = mqtt.connect(process.env.MQTT_BROKER_URL, mqttOptions);
 
 client.on("connect", () => {
   console.log("🚀 MQTT connected");
-  client.subscribe("hse/#", { qos: 1 });
+client.subscribe("hsemonitor/devices/+/telemetry", { qos: 1 });
 });
 
 client.on("message", async (topic, payload, packet) => {

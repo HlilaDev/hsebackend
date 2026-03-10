@@ -1,4 +1,5 @@
 const Zone = require("../models/zoneModel");
+const Device = require("../models/deviceModel");
 
 
 // ✅ CREATE ZONE
@@ -173,5 +174,28 @@ exports.deleteZone = async (req, res) => {
     res.json({ message: "Zone deleted successfully" });
   } catch (err) {
     res.status(500).json({ message: "Delete zone failed", error: err.message });
+  }
+};
+
+// ✅ GET DEVICES BY ZONE
+exports.getDevicesByZone = async (req, res) => {
+  try {
+    const { zoneId } = req.params;
+
+    const zone = await Zone.findById(zoneId).select("_id name");
+    if (!zone) {
+      return res.status(404).json({ message: "Zone not found" });
+    }
+
+    const devices = await Device.find({ zone: zoneId })
+      .select("_id name deviceId status zone sensors lastSeen description createdAt updatedAt")
+      .sort({ createdAt: -1 });
+
+    res.json(devices);
+  } catch (err) {
+    res.status(500).json({
+      message: "Get devices by zone failed",
+      error: err.message,
+    });
   }
 };

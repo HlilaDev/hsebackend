@@ -2,46 +2,27 @@ const mongoose = require("mongoose");
 
 const deviceSchema = new mongoose.Schema(
   {
-    deviceId: {
-      type: String,
-      required: true,
-      unique: true,
-      trim: true
-    },
+    // identifiant physique (MQTT) du device
+    deviceId: { type: String, required: true, unique: true, trim: true },
 
-    name: {
-      type: String,
-      default: ""
-    },
+    name: { type: String, default: "", trim: true },
 
     zone: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Zone",
-      required: true
+      required: true,
     },
 
+    // ✅ relations vers sensors (refs)
     sensors: [
-      {
-        type: String,
-        trim: true
-      }
+      { type: mongoose.Schema.Types.ObjectId, ref: "Sensor" }
     ],
 
-    status: {
-      type: String,
-      enum: ["online", "offline"],
-      default: "offline"
-    },
+    status: { type: String, enum: ["online", "offline"], default: "offline" },
 
-    lastSeen: {
-      type: Date,
-      default: null
-    },
+    description: { type: String, default: "", trim: true },
 
-    description: {
-      type: String,
-      default: ""
-    }
+    lastSeen: { type: Date, default: null },
   },
   { timestamps: true }
 );

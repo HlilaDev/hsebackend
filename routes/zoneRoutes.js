@@ -16,6 +16,10 @@ router.get("/", zoneController.listZones);
 router.get("/:id", zoneController.getZoneById);
 
 
+//to add
+router.get("/:zoneId/devices", zoneController.getDevicesByZone);
+
+
 // 🔹 UPDATE ZONE (general info)
 router.put("/:id", zoneController.updateZone);
 

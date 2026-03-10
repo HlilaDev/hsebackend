@@ -1,12 +1,11 @@
-// mqtt/mqttHandler.js
 const Device = require("../models/deviceModel");
 const Reading = require("../models/readingModel");
 const parsers = require("./parsers");
+const { evaluateValues } = require("../services/alertRuleEngine");
 
 function safeParse(payload) {
   const s = payload.toString().trim();
 
-  // JSON normal
   if (s.startsWith("{") || s.startsWith("[")) {
     try {
       return JSON.parse(s);
@@ -15,34 +14,42 @@ function safeParse(payload) {
     }
   }
 
-  // format "temperature=16.6" ou "humidity=55.1" ou "temperature:16.6,humidity:55"
   const obj = {};
   for (const part of s.split(/[;,]+/)) {
-    const [k, v] = part.split(/[:=]/).map(x => x && x.trim());
+    const [k, v] = part.split(/[:=]/).map((x) => x && x.trim());
     if (k && v) obj[k] = v;
   }
   if (Object.keys(obj).length > 0) return obj;
 
-  // sinon brut
   return { value: s };
 }
 
-
-module.exports = async function mqttHandler(topic, payload) {
-  // sensors/{deviceId}/{sensorType}
+async function mqttHandler(topic, payload) {
   const parts = topic.split("/");
-  if (parts.length < 3) return;
 
-  const deviceId = parts[1];
-  const sensorType = parts[2];
+  if (parts.length < 4) {
+    console.warn(`⚠️ Invalid topic: ${topic}`);
+    return;
+  }
+
+  const deviceId = parts[2];
+  const channel = parts[3];
+
+  if (channel !== "telemetry") return;
+
+  const data = safeParse(payload);
+
+  const sensorType = data.sensorType;
+  if (!sensorType) {
+    console.warn(`⚠️ Missing sensorType in payload for topic: ${topic}`);
+    return;
+  }
 
   const parser = parsers[sensorType];
   if (!parser) {
     console.warn(`⚠️ No parser for sensorType: ${sensorType}`);
     return;
   }
-
-  const data = safeParse(payload);
 
   const { values, raw } = parser(data);
 
@@ -58,10 +65,55 @@ module.exports = async function mqttHandler(topic, payload) {
   }
 
   await Reading.create({
-    device: device._id,   
+    device: device._id,
     zone: device.zone,
     sensorType,
     values,
-    raw
+    raw,
   });
+
+  const alerts = await evaluateValues({
+    values,
+    device,
+    zone: device.zone,
+    sensor: undefined,
+  });
+
+  if (alerts.length) {
+    console.log(`🚨 ${alerts.length} alert(s) triggered for ${deviceId}`);
+  }
+
+  console.log(`✅ Reading saved for ${deviceId} (${sensorType})`);
+}
+
+function publishDeviceCommand(deviceId, action, params = {}) {
+  const client = require("./mqttClient");
+
+  return new Promise((resolve, reject) => {
+    if (!client || !client.connected) {
+      return reject(new Error("MQTT client not connected"));
+    }
+
+    const topic = `hsemonitor/devices/${deviceId}/commands`;
+
+    const message = {
+      action,
+      requestId: `req_${Date.now()}`,
+      source: "admin-dashboard",
+      timestamp: new Date().toISOString(),
+      params,
+    };
+
+    client.publish(topic, JSON.stringify(message), { qos: 1 }, (err) => {
+      if (err) return reject(err);
+
+      console.log(`📤 Command sent to ${deviceId}: ${action}`);
+      resolve({ topic, message });
+    });
+  });
+}
+
+module.exports = {
+  mqttHandler,
+  publishDeviceCommand,
 };

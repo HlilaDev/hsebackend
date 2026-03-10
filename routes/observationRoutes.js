@@ -7,5 +7,8 @@ router.get("/:id", c.getObservationById);
 router.patch("/:id", c.updateObservation);
 router.post("/:id/images", c.addObservationImage);
 router.delete("/:id", c.deleteObservation);
+// Route pour obtenir le nombre d'observations d'un agent spécifique
+router.get('/agent/:agentId/count', c.getObservationsCountByAgent);
+
 
 module.exports = router;

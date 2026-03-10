@@ -155,3 +155,20 @@ exports.deleteEmployee = async (req, res) => {
     res.status(500).json({ message: "Delete employee failed", error: err.message });
   }
 };
+
+exports.getEmployeesByZone = async (req, res) => {
+  try {
+    const { zoneId } = req.params;
+
+    const employees = await Employee.find({ zone: zoneId })
+      .select("_id fullName department jobTitle isActive")
+      .sort({ fullName: 1 });
+
+    res.json(employees);
+  } catch (err) {
+    res.status(500).json({
+      message: "Get employees by zone failed",
+      error: err.message,
+    });
+  }
+};

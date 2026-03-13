@@ -1,11 +1,13 @@
 const router = require("express").Router();
 const c = require("../controllers/sensorController");
+const { protect } = require("../middlewares/authMiddleware");
 
-router.post("/", c.createSensor);
-router.get("/", c.getSensors);
-router.get("/:id", c.getSensorById);
-router.put("/:id", c.updateSensor);
-router.patch("/:id/status", c.updateSensorStatus);
-router.delete("/:id", c.deleteSensor);
+
+router.post("/",protect, c.createSensor);
+router.get("/",protect, c.getSensors);
+router.get("/:id",protect, c.getSensorById);
+router.put("/:id",protect, c.updateSensor);
+router.patch("/:id/status",protect, c.updateSensorStatus);
+router.delete("/:id",protect, c.deleteSensor);
 
 module.exports = router;

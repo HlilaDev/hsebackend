@@ -10,21 +10,20 @@ const {
   deleteDevice,
   getDeviceSensors,
   restartDevice,
-  getDevicesByZone
+  getDevicesByZone,
 } = require("../controllers/deviceController");
 
-router.post("/", createDevice);  //api post device localhost:3000/devices/ methode / url 
-router.get("/", getDevices);  //api get device localhost:3000/devices/ methode / url 
+const { protect } = require("../middlewares/authMiddleware");
 
-router.get("/by-device-id/:deviceId", getDeviceByDeviceId); 
-router.post("/:id/restart", restartDevice);
-router.get('/:id/sensors', getDeviceSensors);
-router.get("/:id", getDeviceById); // get localhost:300/devices/123
+router.post("/", protect, createDevice);
+router.get("/", protect, getDevices);
 
+router.get("/by-device-id/:deviceId", protect, getDeviceByDeviceId);
+router.post("/:id/restart", protect, restartDevice);
+router.get("/:id/sensors", protect, getDeviceSensors);
 
-router.put("/:id", updateDevice);
-router.delete("/:id", deleteDevice);
-
-
+router.get("/:id", protect, getDeviceById);
+router.put("/:id", protect, updateDevice);
+router.delete("/:id", protect, deleteDevice);
 
 module.exports = router;

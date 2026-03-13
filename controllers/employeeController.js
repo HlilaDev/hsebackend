@@ -7,6 +7,7 @@ exports.createEmployee = async (req, res) => {
       fullName: req.body.fullName,
       employeeId: req.body.employeeId,
       department: req.body.department,
+      company: req.user.company,
       jobTitle: req.body.jobTitle,
       zone: req.body.zone,
       phone: req.body.phone,
@@ -16,14 +17,23 @@ exports.createEmployee = async (req, res) => {
 
     const doc = await Employee.create(payload);
 
-    const populated = await Employee.findById(doc._id).populate("zone");
+    const populated = await Employee.findOne({
+      _id: doc._id,
+      company: req.user.company,
+    })
+      .populate("zone")
+      .populate("company", "name industry");
+
     res.status(201).json(populated);
   } catch (err) {
-    // duplicate key (employeeId unique)
     if (err.code === 11000) {
       return res.status(400).json({ message: "employeeId already exists" });
     }
-    res.status(500).json({ message: "Create employee failed", error: err.message });
+
+    res.status(500).json({
+      message: "Create employee failed",
+      error: err.message,
+    });
   }
 };
 
@@ -41,12 +51,14 @@ exports.listEmployees = async (req, res) => {
       sort = "fullName",
     } = req.query;
 
-    const filter = {};
+    const filter = {
+      company: req.user.company,
+    };
+
     if (zone) filter.zone = zone;
     if (department) filter.department = department;
     if (jobTitle) filter.jobTitle = jobTitle;
 
-    // isActive can be "true" / "false"
     if (isActive !== undefined) {
       if (isActive === "true") filter.isActive = true;
       if (isActive === "false") filter.isActive = false;
@@ -66,6 +78,7 @@ exports.listEmployees = async (req, res) => {
     const [items, total] = await Promise.all([
       Employee.find(filter)
         .populate("zone")
+        .populate("company", "name industry")
         .sort(sort)
         .skip(skip)
         .limit(Number(limit)),
@@ -82,22 +95,38 @@ exports.listEmployees = async (req, res) => {
       },
     });
   } catch (err) {
-    res.status(500).json({ message: "List employees failed", error: err.message });
+    res.status(500).json({
+      message: "List employees failed",
+      error: err.message,
+    });
   }
 };
 
 // Get by id
 exports.getEmployeeById = async (req, res) => {
   try {
-    const doc = await Employee.findById(req.params.id).populate("zone");
-    if (!doc) return res.status(404).json({ message: "Employee not found" });
+    const doc = await Employee.findOne({
+      _id: req.params.id,
+      company: req.user.company,
+    })
+      .populate("zone")
+      .populate("company", "name industry")
+      .populate("trainings");
+
+    if (!doc) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
     res.json(doc);
   } catch (err) {
-    res.status(500).json({ message: "Get employee failed", error: err.message });
+    res.status(500).json({
+      message: "Get employee failed",
+      error: err.message,
+    });
   }
 };
 
-// Update (whitelist)
+// Update
 exports.updateEmployee = async (req, res) => {
   try {
     const updates = {
@@ -111,56 +140,101 @@ exports.updateEmployee = async (req, res) => {
       isActive: req.body.isActive,
     };
 
-    // remove undefined fields
-    Object.keys(updates).forEach((k) => updates[k] === undefined && delete updates[k]);
+    Object.keys(updates).forEach((key) => {
+      if (updates[key] === undefined) delete updates[key];
+    });
 
-    const doc = await Employee.findByIdAndUpdate(req.params.id, updates, {
-      new: true,
-      runValidators: true,
-    }).populate("zone");
+    const doc = await Employee.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        company: req.user.company,
+      },
+      updates,
+      {
+        new: true,
+        runValidators: true,
+      }
+    )
+      .populate("zone")
+      .populate("company", "name industry");
 
-    if (!doc) return res.status(404).json({ message: "Employee not found" });
+    if (!doc) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
     res.json(doc);
   } catch (err) {
     if (err.code === 11000) {
       return res.status(400).json({ message: "employeeId already exists" });
     }
-    res.status(500).json({ message: "Update employee failed", error: err.message });
+
+    res.status(500).json({
+      message: "Update employee failed",
+      error: err.message,
+    });
   }
 };
 
-// Soft delete (disable employee)
+// Soft delete
 exports.disableEmployee = async (req, res) => {
   try {
-    const doc = await Employee.findByIdAndUpdate(
-      req.params.id,
+    const doc = await Employee.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        company: req.user.company,
+      },
       { isActive: false },
       { new: true }
-    ).populate("zone");
+    )
+      .populate("zone")
+      .populate("company", "name industry");
 
-    if (!doc) return res.status(404).json({ message: "Employee not found" });
-    res.json({ message: "Employee disabled", employee: doc });
+    if (!doc) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
+    res.json({
+      message: "Employee disabled",
+      employee: doc,
+    });
   } catch (err) {
-    res.status(500).json({ message: "Disable employee failed", error: err.message });
+    res.status(500).json({
+      message: "Disable employee failed",
+      error: err.message,
+    });
   }
 };
 
-// Hard delete (optional)
+// Hard delete
 exports.deleteEmployee = async (req, res) => {
   try {
-    const doc = await Employee.findByIdAndDelete(req.params.id);
-    if (!doc) return res.status(404).json({ message: "Employee not found" });
+    const doc = await Employee.findOneAndDelete({
+      _id: req.params.id,
+      company: req.user.company,
+    });
+
+    if (!doc) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
     res.json({ message: "Employee deleted" });
   } catch (err) {
-    res.status(500).json({ message: "Delete employee failed", error: err.message });
+    res.status(500).json({
+      message: "Delete employee failed",
+      error: err.message,
+    });
   }
 };
 
+// Get employees by zone
 exports.getEmployeesByZone = async (req, res) => {
   try {
     const { zoneId } = req.params;
 
-    const employees = await Employee.find({ zone: zoneId })
+    const employees = await Employee.find({
+      zone: zoneId,
+      company: req.user.company,
+    })
       .select("_id fullName department jobTitle isActive")
       .sort({ fullName: 1 });
 

@@ -5,15 +5,18 @@ const {
   createUser,
   getUsers,
   getUserById,
-  updateUser,   // ✅ add
-  deleteUser
+  updateUser,
+  deleteUser,
 } = require("../controllers/userController");
 
+const {protect} = require("../middlewares/protect");
+const authorizeRoles = require("../middlewares/authorizeRoles");
+
 // Routes
-router.post("/", createUser);
-router.get("/", getUsers);
-router.get("/:id", getUserById);
-router.put("/:id", updateUser);   // ✅ EDIT route
-router.delete("/:id", deleteUser);
+router.post("/", protect, authorizeRoles("admin"), createUser);
+router.get("/", protect, authorizeRoles("admin"), getUsers);
+router.get("/:id", protect, authorizeRoles("admin"), getUserById);
+router.put("/:id", protect, authorizeRoles("admin"), updateUser);
+router.delete("/:id", protect, authorizeRoles("admin"), deleteUser);
 
 module.exports = router;

@@ -1,60 +1,85 @@
-// controllers/sensorController.js
 const mongoose = require("mongoose");
 const Sensor = require("../models/sensorModel");
 const Device = require("../models/deviceModel");
-const Zone = require("../models/zoneModel"); // optionnel, mais gardé si tu l'utilises ailleurs
+const Zone = require("../models/zoneModel");
 
 // POST /api/sensors
 exports.createSensor = async (req, res) => {
   try {
     let { name, device, type, threshold, unit } = req.body;
 
-    // Nettoyage agressif du nom
-    if (typeof name !== "string") {
-      return res.status(400).json({ message: "Le nom doit être une chaîne de caractères." });
+    if (!req.user?.company) {
+      return res.status(401).json({ message: "User company not found." });
     }
 
-    name = name.trim().replace(/\s+/g, " "); // remplace multiples espaces par un seul
+    if (typeof name !== "string") {
+      return res
+        .status(400)
+        .json({ message: "Le nom doit être une chaîne de caractères." });
+    }
+
+    name = name.trim().replace(/\s+/g, " ");
 
     if (!name || name.length < 2) {
-      return res.status(400).json({ message: "Le nom doit contenir au moins 2 caractères valides." });
+      return res.status(400).json({
+        message: "Le nom doit contenir au moins 2 caractères valides.",
+      });
     }
 
     if (!mongoose.isValidObjectId(device)) {
       return res.status(400).json({ message: "ID de device invalide." });
     }
 
-    const deviceDoc = await Device.findById(device);
+    const deviceDoc = await Device.findOne({
+      _id: device,
+      company: req.user.company,
+    });
+
     if (!deviceDoc) {
       return res.status(404).json({ message: "Device introuvable." });
     }
 
     if (!deviceDoc.zone) {
       return res.status(400).json({
-        message: "Ce device n'est rattaché à aucune zone. Associez une zone d'abord.",
+        message:
+          "Ce device n'est rattaché à aucune zone. Associez une zone d'abord.",
       });
     }
 
-    const zoneId = deviceDoc.zone; // déjà ObjectId normalement
+    const zoneDoc = await Zone.findOne({
+      _id: deviceDoc.zone,
+      company: req.user.company,
+    });
 
-    console.log(`[CREATE SENSOR] Tentative pour device=${device}, name="${name}"`);
+    if (!zoneDoc) {
+      return res.status(404).json({ message: "Zone introuvable." });
+    }
+
+    const zoneId = zoneDoc._id;
 
     const created = await Sensor.create({
       name,
-      device,
       type,
+      company: req.user.company,
+      device: deviceDoc._id,
       zone: zoneId,
       threshold: threshold ?? null,
       unit: unit ?? null,
       status: "offline",
     });
 
-    // Optionnel : ajouter au tableau sensors du device
-    await Device.findByIdAndUpdate(device, { $addToSet: { sensors: created._id } });
+    await Device.findOneAndUpdate(
+      { _id: deviceDoc._id, company: req.user.company },
+      { $addToSet: { sensors: created._id } }
+    );
 
-    const populated = await Sensor.findById(created._id)
+    const populated = await Sensor.findOne({
+      _id: created._id,
+      company: req.user.company,
+    })
       .populate("zone", "name")
-      .populate("device", "name deviceId");
+      .populate("device", "name deviceId")
+      .populate("company", "name industry");
 
     return res.status(201).json(populated);
   } catch (err) {
@@ -68,7 +93,9 @@ exports.createSensor = async (req, res) => {
 
     if (err.code === 11000) {
       return res.status(409).json({
-        message: `Un capteur nommé "${req.body.name?.trim() || "(vide)"}" existe déjà pour ce device.`,
+        message: `Un capteur nommé "${
+          req.body.name?.trim() || "(vide)"
+        }" existe déjà pour ce device.`,
         field: "name",
         code: "duplicate_sensor_name",
       });
@@ -81,14 +108,19 @@ exports.createSensor = async (req, res) => {
   }
 };
 
-// other methods remain good — no change needed
-
 // GET /api/sensors?zone=...&type=...&status=...&q=...&device=...
 exports.getSensors = async (req, res) => {
   try {
     const { zone, type, status, q, device } = req.query;
 
-    const filter = {};
+    if (!req.user?.company) {
+      return res.status(401).json({ message: "User company not found." });
+    }
+
+    const filter = {
+      company: req.user.company,
+    };
+
     if (zone) filter.zone = zone;
     if (type) filter.type = type;
     if (status) filter.status = status;
@@ -97,7 +129,8 @@ exports.getSensors = async (req, res) => {
 
     const sensors = await Sensor.find(filter)
       .populate("zone", "name")
-      .populate("device", "name deviceId");
+      .populate("device", "name deviceId")
+      .populate("company", "name industry");
 
     return res.json(sensors);
   } catch (err) {
@@ -111,15 +144,25 @@ exports.getSensorById = async (req, res) => {
   try {
     const { id } = req.params;
 
+    if (!req.user?.company) {
+      return res.status(401).json({ message: "User company not found." });
+    }
+
     if (!mongoose.isValidObjectId(id)) {
       return res.status(400).json({ message: "Invalid sensor id format." });
     }
 
-    const sensor = await Sensor.findById(id)
+    const sensor = await Sensor.findOne({
+      _id: id,
+      company: req.user.company,
+    })
       .populate("zone", "name")
-      .populate("device", "name deviceId");
+      .populate("device", "name deviceId")
+      .populate("company", "name industry");
 
-    if (!sensor) return res.status(404).json({ message: "Sensor not found." });
+    if (!sensor) {
+      return res.status(404).json({ message: "Sensor not found." });
+    }
 
     return res.json(sensor);
   } catch (err) {
@@ -133,6 +176,10 @@ exports.updateSensor = async (req, res) => {
   try {
     const { id } = req.params;
 
+    if (!req.user?.company) {
+      return res.status(401).json({ message: "User company not found." });
+    }
+
     if (!mongoose.isValidObjectId(id)) {
       return res.status(400).json({ message: "Invalid sensor id format." });
     }
@@ -144,17 +191,46 @@ exports.updateSensor = async (req, res) => {
       if (req.body[key] !== undefined) updates[key] = req.body[key];
     }
 
-    if (updates.name) updates.name = String(updates.name).trim();
+    if (updates.name) {
+      updates.name = String(updates.name).trim().replace(/\s+/g, " ");
+      if (updates.name.length < 2) {
+        return res.status(400).json({
+          message: "Le nom doit contenir au moins 2 caractères valides.",
+        });
+      }
+    }
 
-    const sensor = await Sensor.findByIdAndUpdate(id, updates, { new: true })
+    const sensor = await Sensor.findOneAndUpdate(
+      {
+        _id: id,
+        company: req.user.company,
+      },
+      updates,
+      {
+        new: true,
+        runValidators: true,
+      }
+    )
       .populate("zone", "name")
-      .populate("device", "name deviceId");
+      .populate("device", "name deviceId")
+      .populate("company", "name industry");
 
-    if (!sensor) return res.status(404).json({ message: "Sensor not found." });
+    if (!sensor) {
+      return res.status(404).json({ message: "Sensor not found." });
+    }
 
     return res.json(sensor);
   } catch (err) {
     console.error("❌ updateSensor error:", err);
+
+    if (err.code === 11000) {
+      return res.status(409).json({
+        message: "Un capteur avec ce nom existe déjà pour ce device.",
+        field: "name",
+        code: "duplicate_sensor_name",
+      });
+    }
+
     return res.status(500).json({ message: "Server error", error: err.message });
   }
 };
@@ -165,6 +241,10 @@ exports.updateSensorStatus = async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
 
+    if (!req.user?.company) {
+      return res.status(401).json({ message: "User company not found." });
+    }
+
     if (!mongoose.isValidObjectId(id)) {
       return res.status(400).json({ message: "Invalid sensor id format." });
     }
@@ -173,13 +253,21 @@ exports.updateSensorStatus = async (req, res) => {
       return res.status(400).json({ message: "Invalid status." });
     }
 
-    const sensor = await Sensor.findByIdAndUpdate(
-      id,
+    const sensor = await Sensor.findOneAndUpdate(
+      {
+        _id: id,
+        company: req.user.company,
+      },
       { status },
-      { new: true }
-    );
+      { new: true, runValidators: true }
+    )
+      .populate("zone", "name")
+      .populate("device", "name deviceId")
+      .populate("company", "name industry");
 
-    if (!sensor) return res.status(404).json({ message: "Sensor not found." });
+    if (!sensor) {
+      return res.status(404).json({ message: "Sensor not found." });
+    }
 
     return res.json(sensor);
   } catch (err) {
@@ -193,19 +281,37 @@ exports.deleteSensor = async (req, res) => {
   try {
     const { id } = req.params;
 
+    if (!req.user?.company) {
+      return res.status(401).json({ message: "User company not found." });
+    }
+
     if (!mongoose.isValidObjectId(id)) {
       return res.status(400).json({ message: "Invalid sensor id format." });
     }
 
-    const sensor = await Sensor.findById(id);
-    if (!sensor) return res.status(404).json({ message: "Sensor not found." });
-
-    // retirer la ref du device
-    await Device.findByIdAndUpdate(sensor.device, {
-      $pull: { sensors: sensor._id },
+    const sensor = await Sensor.findOne({
+      _id: id,
+      company: req.user.company,
     });
 
-    await Sensor.findByIdAndDelete(id);
+    if (!sensor) {
+      return res.status(404).json({ message: "Sensor not found." });
+    }
+
+    await Device.findOneAndUpdate(
+      {
+        _id: sensor.device,
+        company: req.user.company,
+      },
+      {
+        $pull: { sensors: sensor._id },
+      }
+    );
+
+    await Sensor.findOneAndDelete({
+      _id: id,
+      company: req.user.company,
+    });
 
     return res.json({ message: "Sensor deleted." });
   } catch (err) {

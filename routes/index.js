@@ -16,7 +16,12 @@ const auditRoutes = require("./auditRoutes");
 const alertRoutes = require("./alertRoutes");
 const alertRuleRoutes = require("./alertRuleRoutes");
 const notificationRoutes = require('./notificationRoutes');
+const useNotificationRoutes = require('./userNotificationRoutes');
+const companyRoutes = require("./companyRoutes");
 
+
+
+router.use("/companies", companyRoutes);
 router.use("/users", userRoutes);
 router.use("/auth", authRoutes);
 router.use("/zones", zoneRoutes);
@@ -30,6 +35,8 @@ router.use("/audits", auditRoutes);
 router.use("/alerts", alertRoutes);
 router.use("/alert-rules", alertRuleRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/user-notifications', useNotificationRoutes);
+
 
 
 router.use("/sensors", sensorsRoutes);

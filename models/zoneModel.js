@@ -5,9 +5,14 @@ const zoneSchema = new mongoose.Schema(
     name: {
       type: String,
       required: true,
+      trim: true,
     },
 
-    description: String,
+    description: {
+      type: String,
+      default: "",
+      trim: true,
+    },
 
     riskLevel: {
       type: String,
@@ -20,40 +25,42 @@ const zoneSchema = new mongoose.Schema(
       default: true,
     },
 
-    // 🎯 ROI (Region Of Interest) pour la caméra
     roi: {
-      x1: Number,
-      y1: Number,
-      x2: Number,
-      y2: Number,
+      x1: { type: Number, default: 0 },
+      y1: { type: Number, default: 0 },
+      x2: { type: Number, default: 0 },
+      y2: { type: Number, default: 0 },
     },
 
-    // 🦺 Règles EPI intégrées
     ppeRules: {
-      helmet: {
-        required: { type: Boolean, default: true },
-        minConfidence: { type: Number, default: 0.75 },
-      },
-      vest: {
-        required: { type: Boolean, default: true },
-        minConfidence: { type: Number, default: 0.70 },
-      },
-      gloves: {
-        required: { type: Boolean, default: false },
-        minConfidence: { type: Number, default: 0.70 },
-      },
-      glasses: {
-        required: { type: Boolean, default: false },
-        minConfidence: { type: Number, default: 0.70 },
-      },
+      helmet: { type: Boolean, default: false },
+      vest: { type: Boolean, default: false },
+      gloves: { type: Boolean, default: false },
+      boots: { type: Boolean, default: false },
+      glasses: { type: Boolean, default: false },
+    },
+
+    configVersion: {
+      type: Number,
+      default: 1,
     },
 
     company: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Company",
+      required: true,
+      index: true,
+    },
+
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
     },
   },
   { timestamps: true }
 );
+
+zoneSchema.index({ company: 1, name: 1 }, { unique: true });
 
 module.exports = mongoose.model("Zone", zoneSchema);

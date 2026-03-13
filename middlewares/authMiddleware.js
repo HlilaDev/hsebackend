@@ -21,6 +21,7 @@ exports.protect = async (req, res, next) => {
       firstName: user.firstName,
       lastName: user.lastName,
       fullName: user.fullName,
+      company: user.company,
       email: user.email,
       role: user.role,
     };

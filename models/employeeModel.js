@@ -21,6 +21,12 @@ const employeeSchema = new mongoose.Schema(
       trim: true, // ex: Production, Maintenance, HSE
     },
 
+    company: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Company",
+      required: true,
+    },
+
     jobTitle: {
       type: String,
       trim: true, // ex: Soudeur, Cariste...
@@ -45,11 +51,23 @@ const employeeSchema = new mongoose.Schema(
       default: true,
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  }
 );
 
-// Index utile
+// Index utiles
 employeeSchema.index({ fullName: 1 });
 employeeSchema.index({ department: 1 });
+employeeSchema.index({ company: 1 });
+
+// Virtual: récupère les trainings liés via Training.participants.employee
+employeeSchema.virtual("trainings", {
+  ref: "Training",
+  localField: "_id",
+  foreignField: "participants.employee",
+});
 
 module.exports = mongoose.model("Employee", employeeSchema);

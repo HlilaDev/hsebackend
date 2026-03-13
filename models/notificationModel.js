@@ -2,6 +2,12 @@ const mongoose = require('mongoose');
 
 const notificationSchema = new mongoose.Schema(
   {
+    company: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Company',
+      required: true,
+    },
+
     title: {
       type: String,
       required: true,
@@ -14,7 +20,6 @@ const notificationSchema = new mongoose.Schema(
       trim: true,
     },
 
-    // type principal de notification
     type: {
       type: String,
       enum: [
@@ -30,7 +35,6 @@ const notificationSchema = new mongoose.Schema(
       default: 'alert',
     },
 
-    // action métier plus précise
     action: {
       type: String,
       default: 'created',
@@ -43,28 +47,12 @@ const notificationSchema = new mongoose.Schema(
       default: 'info',
     },
 
-    isRead: {
-      type: Boolean,
-      default: false,
-    },
-
-    // destinataire si notification ciblée
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      default: null,
-    },
-
-
-
-    // utilisateur qui a généré l'action
     actor: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       default: null,
     },
 
-    // références métier possibles
     alert: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Alert',
@@ -119,7 +107,6 @@ const notificationSchema = new mongoose.Schema(
       default: null,
     },
 
-    // données supplémentaires flexibles
     meta: {
       type: mongoose.Schema.Types.Mixed,
       default: {},

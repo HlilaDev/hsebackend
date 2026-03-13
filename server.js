@@ -9,6 +9,7 @@ const routes = require("./routes");
 const path = require("path");
 const fs = require("fs");
 
+const { startDeviceHeartbeatMonitor } = require("./services/deviceHeartbeatMonitor");
 const { initSocket } = require("./socket/socketServer");
 
 const app = express();
@@ -53,3 +54,8 @@ initSocket(server);
 
 const port = process.env.PORT || 3001;
 server.listen(port, () => console.log(`Server running on port ${port}`));
+
+
+//offline devices Checker
+startDeviceHeartbeatMonitor();
+console.log("✅ Device heartbeat monitor started");

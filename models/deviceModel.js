@@ -12,6 +12,11 @@ const deviceSchema = new mongoose.Schema(
       ref: "Zone",
       required: true,
     },
+    company: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Company",
+  required: true,
+},
 
     // ✅ relations vers sensors (refs)
     sensors: [

@@ -1,39 +1,15 @@
 const express = require("express");
 const router = express.Router();
-
 const zoneController = require("../controllers/zoneController");
+const { protect } = require("../middlewares/protect");
 
-
-// 🔹 CREATE ZONE
-router.post("/", zoneController.createZone);
-
-
-// 🔹 LIST ZONES (pagination + filters)
-router.get("/", zoneController.listZones);
-
-
-// 🔹 GET ONE ZONE
-router.get("/:id", zoneController.getZoneById);
-
-
-//to add
-router.get("/:zoneId/devices", zoneController.getDevicesByZone);
-
-
-// 🔹 UPDATE ZONE (general info)
-router.put("/:id", zoneController.updateZone);
-
-
-// 🔹 UPDATE PPE RULES + ROI (incrément configVersion)
-router.patch("/:id/rules", zoneController.updateZoneRules);
-
-
-// 🔹 GET CONFIG (Polling Raspberry)
-router.get("/:id/config", zoneController.getZoneConfig);
-
-
-// 🔹 DELETE ZONE
-router.delete("/:id", zoneController.deleteZone);
-
+router.post("/", protect, zoneController.createZone);
+router.get("/", protect, zoneController.listZones);
+router.get("/:id", protect, zoneController.getZoneById);
+router.put("/:id", protect, zoneController.updateZone);
+router.patch("/:id/rules", protect, zoneController.updateZoneRules);
+router.get("/:id/config", protect, zoneController.getZoneConfig);
+router.delete("/:id", protect, zoneController.deleteZone);
+router.get("/:zoneId/devices", protect, zoneController.getDevicesByZone);
 
 module.exports = router;

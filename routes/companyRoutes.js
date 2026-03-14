@@ -1,27 +1,43 @@
 const express = require("express");
 const router = express.Router();
 
-const {
-  createCompany,
-  listCompanies,
-  getCompanyById,
-  updateCompany,
-  deleteCompany,
-} = require("../controllers/companyController");
+const companyController = require("../controllers/companyController");
+const {protect} = require("../middlewares/protect");
+const authorizeRoles = require("../middlewares/authorizeRoles");
 
-// CREATE
-router.post("/", createCompany);
+router.post(
+  "/",
+  protect,
+  authorizeRoles("superAdmin"),
+  companyController.createCompany
+);
 
-// LIST
-router.get("/", listCompanies);
+router.get(
+  "/",
+  protect,
+  authorizeRoles("superAdmin"),
+  companyController.listCompanies
+);
 
-// GET BY ID
-router.get("/:id", getCompanyById);
+router.get(
+  "/:id",
+  protect,
+  authorizeRoles("superAdmin"),
+  companyController.getCompanyById
+);
 
-// UPDATE
-router.put("/:id", updateCompany);
+router.put(
+  "/:id",
+  protect,
+  authorizeRoles("superAdmin"),
+  companyController.updateCompany
+);
 
-// DELETE
-router.delete("/:id", deleteCompany);
+router.delete(
+  "/:id",
+  protect,
+  authorizeRoles("superAdmin"),
+  companyController.deleteCompany
+);
 
 module.exports = router;

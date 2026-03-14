@@ -12,26 +12,38 @@ const pick = (obj, keys) => {
 };
 
 // helper: compare company ids safely
-const sameCompany = (a, b) => String(a || "") === String(b || "");
+const sameCompany = (a, b) => {
+  const extractId = (value) => {
+    if (!value) return "";
+    if (typeof value === "object") {
+      if (value._id) return String(value._id);
+      if (value.id) return String(value.id);
+    }
+    return String(value);
+  };
+
+  return extractId(a) === extractId(b);
+};
+
+// helper: sanitize returned user
+const getSafeUserById = async (id) => {
+  return User.findById(id)
+    .select("-password")
+    .populate("company", "_id name industry");
+};
 
 // CREATE USER
 exports.createUser = async (req, res) => {
   try {
-    const { firstName, lastName, email, password, role } = req.body;
+    const { firstName, lastName, email, password, role, company } = req.body;
 
     if (!req.user) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    if (!req.user.company) {
+    if (!firstName || !lastName || !email || !password || !role) {
       return res.status(400).json({
-        message: "Connected admin is not linked to any company",
-      });
-    }
-
-    if (!firstName || !lastName || !email || !password) {
-      return res.status(400).json({
-        message: "First name, last name, email and password are required",
+        message: "First name, last name, email, password and role are required",
       });
     }
 
@@ -48,11 +60,64 @@ exports.createUser = async (req, res) => {
       return res.status(400).json({ message: "Email already exists" });
     }
 
-    const companyId = req.user.company;
+    let companyToAssign = null;
 
-    const companyExists = await Company.findById(companyId);
-    if (!companyExists) {
-      return res.status(400).json({ message: "Invalid connected user company" });
+    // superAdmin => can create only admin
+    if (req.user.role === "superAdmin") {
+      if (role !== "admin") {
+        return res.status(403).json({
+          message: "Super admin can only create admin accounts",
+        });
+      }
+
+      if (!company) {
+        return res.status(400).json({
+          message: "Company is required when creating an admin",
+        });
+      }
+
+      const companyExists = await Company.findById(company);
+      if (!companyExists) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+
+      companyToAssign = companyExists._id;
+    }
+
+    // admin => can create only manager / agent in same company
+    else if (req.user.role === "admin") {
+      if (!req.user.company) {
+        return res.status(400).json({
+          message: "Connected admin is not linked to any company",
+        });
+      }
+
+      if (!["manager", "agent"].includes(role)) {
+        return res.status(403).json({
+          message: "Admin can only create manager or agent accounts",
+        });
+      }
+
+      const adminCompanyId =
+        typeof req.user.company === "object" && req.user.company._id
+          ? req.user.company._id
+          : req.user.company;
+
+      const companyExists = await Company.findById(adminCompanyId);
+      if (!companyExists) {
+        return res.status(400).json({
+          message: "Invalid connected admin company",
+        });
+      }
+
+      companyToAssign = adminCompanyId;
+    }
+
+    // manager / agent => cannot create users
+    else {
+      return res.status(403).json({
+        message: "You are not allowed to create users",
+      });
     }
 
     const hashed = await bcrypt.hash(String(password), 10);
@@ -63,19 +128,20 @@ exports.createUser = async (req, res) => {
       email: normalizedEmail,
       password: hashed,
       role,
-      company: companyId, // same company as connected admin
+      company: companyToAssign,
     });
 
-    const safeUser = await User.findById(user._id)
-      .select("-password")
-      .populate("company", "_id name industry");
+    const safeUser = await getSafeUserById(user._id);
 
     res.status(201).json({
       message: "User created successfully",
       user: safeUser,
     });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    res.status(500).json({
+      message: "Create user failed",
+      error: error.message,
+    });
   }
 };
 
@@ -86,20 +152,40 @@ exports.getUsers = async (req, res) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    if (!req.user.company) {
-      return res.status(400).json({
-        message: "Connected user is not linked to any company",
+    let filter = {};
+
+    if (req.user.role === "superAdmin") {
+      filter = {};
+    } else if (req.user.role === "admin") {
+      if (!req.user.company) {
+        return res.status(400).json({
+          message: "Connected admin is not linked to any company",
+        });
+      }
+
+      const adminCompanyId =
+        typeof req.user.company === "object" && req.user.company._id
+          ? req.user.company._id
+          : req.user.company;
+
+      filter = { company: adminCompanyId };
+    } else {
+      return res.status(403).json({
+        message: "You are not allowed to view users",
       });
     }
 
-    const users = await User.find({ company: req.user.company })
+    const users = await User.find(filter)
       .select("-password")
       .populate("company", "_id name industry")
       .sort({ createdAt: -1 });
 
     res.status(200).json(users);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({
+      message: "Get users failed",
+      error: error.message,
+    });
   }
 };
 
@@ -110,12 +196,6 @@ exports.getUserById = async (req, res) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    if (!req.user.company) {
-      return res.status(400).json({
-        message: "Connected user is not linked to any company",
-      });
-    }
-
     const user = await User.findById(req.params.id)
       .select("-password")
       .populate("company", "_id name industry");
@@ -124,15 +204,34 @@ exports.getUserById = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    if (!sameCompany(user.company?._id || user.company, req.user.company)) {
-      return res.status(403).json({
-        message: "Access denied: user does not belong to your company",
-      });
+    if (req.user.role === "superAdmin") {
+      return res.status(200).json(user);
     }
 
-    res.status(200).json(user);
+    if (req.user.role === "admin") {
+      if (!req.user.company) {
+        return res.status(400).json({
+          message: "Connected admin is not linked to any company",
+        });
+      }
+
+      if (!sameCompany(user.company, req.user.company)) {
+        return res.status(403).json({
+          message: "Access denied: user does not belong to your company",
+        });
+      }
+
+      return res.status(200).json(user);
+    }
+
+    return res.status(403).json({
+      message: "You are not allowed to view this user",
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({
+      message: "Get user failed",
+      error: error.message,
+    });
   }
 };
 
@@ -145,32 +244,44 @@ exports.updateUser = async (req, res) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    if (!req.user.company) {
-      return res.status(400).json({
-        message: "Connected user is not linked to any company",
-      });
-    }
-
     const existingUser = await User.findById(id);
 
     if (!existingUser) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    if (!sameCompany(existingUser.company, req.user.company)) {
+    if (req.user.role === "superAdmin") {
+      // superAdmin can manage all users
+    } else if (req.user.role === "admin") {
+      if (!req.user.company) {
+        return res.status(400).json({
+          message: "Connected admin is not linked to any company",
+        });
+      }
+
+      if (!sameCompany(existingUser.company, req.user.company)) {
+        return res.status(403).json({
+          message: "Access denied: user does not belong to your company",
+        });
+      }
+
+      if (!["manager", "agent"].includes(existingUser.role)) {
+        return res.status(403).json({
+          message: "Admin can only update manager or agent accounts",
+        });
+      }
+    } else {
       return res.status(403).json({
-        message: "Access denied: user does not belong to your company",
+        message: "You are not allowed to update users",
       });
     }
 
-    // company is intentionally excluded
-    const updates = pick(req.body, [
-      "firstName",
-      "lastName",
-      "email",
-      "role",
-      "password",
-    ]);
+    const allowedFields =
+      req.user.role === "superAdmin"
+        ? ["firstName", "lastName", "email", "role", "password", "company"]
+        : ["firstName", "lastName", "email", "role", "password"];
+
+    const updates = pick(req.body, allowedFields);
 
     if (updates.firstName !== undefined) {
       updates.firstName = String(updates.firstName).trim();
@@ -203,6 +314,37 @@ exports.updateUser = async (req, res) => {
       updates.password = await bcrypt.hash(String(updates.password), 10);
     }
 
+    if (updates.role !== undefined) {
+      if (req.user.role === "superAdmin") {
+        if (!["admin", "manager", "agent"].includes(updates.role)) {
+          return res.status(403).json({
+            message: "Invalid target role",
+          });
+        }
+      }
+
+      if (req.user.role === "admin") {
+        if (!["manager", "agent"].includes(updates.role)) {
+          return res.status(403).json({
+            message: "Admin can only assign manager or agent roles",
+          });
+        }
+      }
+    }
+
+    if (updates.company !== undefined) {
+      if (req.user.role !== "superAdmin") {
+        return res.status(403).json({
+          message: "Only super admin can change user company",
+        });
+      }
+
+      const companyExists = await Company.findById(updates.company);
+      if (!companyExists) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+    }
+
     const user = await User.findByIdAndUpdate(id, updates, {
       new: true,
       runValidators: true,
@@ -215,7 +357,10 @@ exports.updateUser = async (req, res) => {
       user,
     });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    res.status(500).json({
+      message: "Update user failed",
+      error: error.message,
+    });
   }
 };
 
@@ -226,28 +371,59 @@ exports.deleteUser = async (req, res) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    if (!req.user.company) {
-      return res.status(400).json({
-        message: "Connected user is not linked to any company",
-      });
-    }
-
     const user = await User.findById(req.params.id);
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    if (!sameCompany(user.company, req.user.company)) {
-      return res.status(403).json({
-        message: "Access denied: user does not belong to your company",
+    if (req.user.role === "superAdmin") {
+      if (user.role === "superAdmin") {
+        return res.status(403).json({
+          message: "Super admin account cannot be deleted from this route",
+        });
+      }
+
+      await User.findByIdAndDelete(req.params.id);
+
+      return res.status(200).json({
+        message: "User deleted successfully",
       });
     }
 
-    await User.findByIdAndDelete(req.params.id);
+    if (req.user.role === "admin") {
+      if (!req.user.company) {
+        return res.status(400).json({
+          message: "Connected admin is not linked to any company",
+        });
+      }
 
-    res.status(200).json({ message: "User deleted successfully" });
+      if (!sameCompany(user.company, req.user.company)) {
+        return res.status(403).json({
+          message: "Access denied: user does not belong to your company",
+        });
+      }
+
+      if (!["manager", "agent"].includes(user.role)) {
+        return res.status(403).json({
+          message: "Admin can only delete manager or agent accounts",
+        });
+      }
+
+      await User.findByIdAndDelete(req.params.id);
+
+      return res.status(200).json({
+        message: "User deleted successfully",
+      });
+    }
+
+    return res.status(403).json({
+      message: "You are not allowed to delete users",
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({
+      message: "Delete user failed",
+      error: error.message,
+    });
   }
 };

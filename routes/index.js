@@ -18,6 +18,8 @@ const alertRuleRoutes = require("./alertRuleRoutes");
 const notificationRoutes = require('./notificationRoutes');
 const useNotificationRoutes = require('./userNotificationRoutes');
 const companyRoutes = require("./companyRoutes");
+const inventoryRoutes = require("./inventory");
+
 
 
 
@@ -26,6 +28,7 @@ router.use("/users", userRoutes);
 router.use("/auth", authRoutes);
 router.use("/zones", zoneRoutes);
 router.use("/devices", deviceRoutes);
+router.use("/inventory", inventoryRoutes);
 router.use("/observations", observationRoutes);
 router.use("/incidentEvents", incidentEventRoutes);
 router.use("/reports", reportRoutes);
@@ -36,8 +39,6 @@ router.use("/alerts", alertRoutes);
 router.use("/alert-rules", alertRuleRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/user-notifications', useNotificationRoutes);
-
-
 
 router.use("/sensors", sensorsRoutes);
 router.use("/sensor-data", sensorDataRoutes);

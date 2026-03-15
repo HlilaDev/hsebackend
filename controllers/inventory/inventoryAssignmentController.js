@@ -5,6 +5,14 @@ const InventoryMovement = require("../../models/inventory/inventoryMovementModel
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
+const buildAssignmentPopulate = (query) =>
+  query
+    .populate("inventoryItem", "name category subCategory inventoryCode")
+    .populate("employee", "fullName employeeId department jobTitle zone isActive")
+    .populate("assignedBy", "firstName lastName email")
+    .populate("returnedBy", "firstName lastName email")
+    .populate("zone", "name");
+
 // =====================================
 // CREATE ASSIGNMENT
 // =====================================
@@ -19,6 +27,7 @@ exports.createInventoryAssignment = async (req, res) => {
       expectedReturnDate,
       notes,
       metadata,
+      assignedAt,
     } = req.body;
 
     if (!inventoryItem || !isValidObjectId(inventoryItem)) {
@@ -62,6 +71,20 @@ exports.createInventoryAssignment = async (req, res) => {
       });
     }
 
+    let finalAssignedAt = new Date();
+
+    if (assignedAt) {
+      const parsedAssignedAt = new Date(assignedAt);
+      if (!Number.isNaN(parsedAssignedAt.getTime())) {
+        finalAssignedAt = parsedAssignedAt;
+      }
+    } else if (metadata?.assignedAt) {
+      const parsedAssignedAt = new Date(metadata.assignedAt);
+      if (!Number.isNaN(parsedAssignedAt.getTime())) {
+        finalAssignedAt = parsedAssignedAt;
+      }
+    }
+
     const assignment = await InventoryAssignment.create({
       inventoryItem,
       company: finalCompany,
@@ -69,34 +92,35 @@ exports.createInventoryAssignment = async (req, res) => {
       assignedBy: req.user?._id || null,
       assignmentType,
       zone: zone || item.zone || null,
-      assignedAt: new Date(),
+      assignedAt: finalAssignedAt,
       expectedReturnDate: expectedReturnDate || null,
-      notes,
-      metadata,
+      notes: notes || "",
+      metadata: metadata || {},
+      status: "active",
     });
 
-    // update current item
+    const previousQuantity =
+      item.category === "extinguisher" ? 1 : Number(item.quantity || 0);
+
     item.assignedTo = employee;
     item.assignedBy = req.user?._id || null;
-    item.assignedAt = new Date();
+    item.assignedAt = finalAssignedAt;
     item.updatedBy = req.user?._id || null;
     item.status = "assigned";
 
     if (item.category !== "extinguisher") {
-      item.quantity = Math.max(Number(item.quantity || 0) - 1, 0);
+      item.quantity = Math.max(previousQuantity - 1, 0);
     }
 
     await item.save();
 
-    // create movement
     await InventoryMovement.create({
       inventoryItem: item._id,
       company: finalCompany,
       movementType: "assignment",
       quantity: 1,
       unit: item.unit || "unit",
-      previousQuantity:
-        item.category === "extinguisher" ? 1 : Number(item.quantity || 0) + 1,
+      previousQuantity,
       newQuantity: item.category === "extinguisher" ? 1 : Number(item.quantity || 0),
       fromZone: item.zone || null,
       toZone: zone || item.zone || null,
@@ -105,14 +129,15 @@ exports.createInventoryAssignment = async (req, res) => {
       reference: `ASSIGN-${assignment._id}`,
       notes: notes || "",
       createdBy: req.user?._id || null,
+      metadata: {
+        ...(metadata || {}),
+        assignedAt: finalAssignedAt,
+      },
     });
 
-    const populatedAssignment = await InventoryAssignment.findById(assignment._id)
-      .populate("inventoryItem", "name category subCategory inventoryCode")
-      .populate("employee", "firstName lastName email")
-      .populate("assignedBy", "firstName lastName email")
-      .populate("zone", "name")
-      .populate("returnedBy", "firstName lastName email");
+    const populatedAssignment = await buildAssignmentPopulate(
+      InventoryAssignment.findById(assignment._id)
+    );
 
     return res.status(201).json({
       message: "Inventory assignment created successfully",
@@ -162,15 +187,20 @@ exports.returnInventoryAssignment = async (req, res) => {
     await assignment.save();
 
     const item = await InventoryItem.findById(assignment.inventoryItem);
+
     if (item) {
+      const previousQuantity =
+        item.category === "extinguisher" ? 1 : Number(item.quantity || 0);
+
       item.assignedTo = null;
       item.assignedBy = null;
       item.assignedAt = null;
       item.updatedBy = req.user?._id || null;
 
       if (item.category !== "extinguisher") {
-        item.quantity = Number(item.quantity || 0) + 1;
-        item.status = item.quantity <= item.minStockLevel ? "low_stock" : "in_stock";
+        item.quantity = previousQuantity + 1;
+        item.status =
+          item.quantity <= Number(item.minStockLevel || 0) ? "low_stock" : "in_stock";
       } else {
         item.status = "available";
       }
@@ -183,8 +213,7 @@ exports.returnInventoryAssignment = async (req, res) => {
         movementType: "return",
         quantity: 1,
         unit: item.unit || "unit",
-        previousQuantity:
-          item.category === "extinguisher" ? 1 : Number(item.quantity || 0) - 1,
+        previousQuantity,
         newQuantity: item.category === "extinguisher" ? 1 : Number(item.quantity || 0),
         fromZone: assignment.zone || item.zone || null,
         toZone: item.zone || null,
@@ -196,12 +225,9 @@ exports.returnInventoryAssignment = async (req, res) => {
       });
     }
 
-    const populatedAssignment = await InventoryAssignment.findById(assignment._id)
-      .populate("inventoryItem", "name category subCategory inventoryCode")
-      .populate("employee", "firstName lastName email")
-      .populate("assignedBy", "firstName lastName email")
-      .populate("returnedBy", "firstName lastName email")
-      .populate("zone", "name");
+    const populatedAssignment = await buildAssignmentPopulate(
+      InventoryAssignment.findById(assignment._id)
+    );
 
     return res.status(200).json({
       message: "Inventory assignment returned successfully",
@@ -241,29 +267,42 @@ exports.getAllInventoryAssignments = async (req, res) => {
       filter.company = req.query.company;
     }
 
-    if (inventoryItem && isValidObjectId(inventoryItem)) filter.inventoryItem = inventoryItem;
-    if (employee && isValidObjectId(employee)) filter.employee = employee;
-    if (status) filter.status = status;
-    if (assignmentType) filter.assignmentType = assignmentType;
+    if (inventoryItem && isValidObjectId(inventoryItem)) {
+      filter.inventoryItem = inventoryItem;
+    }
+
+    if (employee && isValidObjectId(employee)) {
+      filter.employee = employee;
+    }
+
+    if (status) {
+      filter.status = status;
+    }
+
+    if (assignmentType) {
+      filter.assignmentType = assignmentType;
+    }
 
     const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
     const limitNumber = Math.max(parseInt(limit, 10) || 10, 1);
     const skip = (pageNumber - 1) * limitNumber;
 
     const sortOrder = order === "asc" ? 1 : -1;
-    const allowedSortFields = ["assignedAt", "expectedReturnDate", "returnedAt", "createdAt"];
+    const allowedSortFields = [
+      "assignedAt",
+      "expectedReturnDate",
+      "returnedAt",
+      "createdAt",
+    ];
     const finalSortBy = allowedSortFields.includes(sortBy) ? sortBy : "assignedAt";
 
     const [assignments, total] = await Promise.all([
-      InventoryAssignment.find(filter)
-        .populate("inventoryItem", "name category subCategory inventoryCode")
-        .populate("employee", "firstName lastName email")
-        .populate("assignedBy", "firstName lastName email")
-        .populate("returnedBy", "firstName lastName email")
-        .populate("zone", "name")
-        .sort({ [finalSortBy]: sortOrder })
-        .skip(skip)
-        .limit(limitNumber),
+      buildAssignmentPopulate(
+        InventoryAssignment.find(filter)
+          .sort({ [finalSortBy]: sortOrder })
+          .skip(skip)
+          .limit(limitNumber)
+      ),
       InventoryAssignment.countDocuments(filter),
     ]);
 
@@ -298,14 +337,13 @@ exports.getInventoryAssignmentById = async (req, res) => {
     }
 
     const filter = { _id: id };
-    if (req.user?.company) filter.company = req.user.company;
+    if (req.user?.company) {
+      filter.company = req.user.company;
+    }
 
-    const assignment = await InventoryAssignment.findOne(filter)
-      .populate("inventoryItem", "name category subCategory inventoryCode")
-      .populate("employee", "firstName lastName email")
-      .populate("assignedBy", "firstName lastName email")
-      .populate("returnedBy", "firstName lastName email")
-      .populate("zone", "name");
+    const assignment = await buildAssignmentPopulate(
+      InventoryAssignment.findOne(filter)
+    );
 
     if (!assignment) {
       return res.status(404).json({ message: "Inventory assignment not found" });
@@ -336,13 +374,23 @@ exports.updateInventoryAssignmentStatus = async (req, res) => {
       return res.status(400).json({ message: "Invalid assignment id" });
     }
 
-    const allowedStatuses = ["active", "returned", "overdue", "lost", "damaged", "cancelled"];
+    const allowedStatuses = [
+      "active",
+      "returned",
+      "overdue",
+      "lost",
+      "damaged",
+      "cancelled",
+    ];
+
     if (!status || !allowedStatuses.includes(status)) {
       return res.status(400).json({ message: "Invalid status value" });
     }
 
     const filter = { _id: id };
-    if (req.user?.company) filter.company = req.user.company;
+    if (req.user?.company) {
+      filter.company = req.user.company;
+    }
 
     const assignment = await InventoryAssignment.findOne(filter);
 
@@ -353,9 +401,13 @@ exports.updateInventoryAssignmentStatus = async (req, res) => {
     assignment.status = status;
     await assignment.save();
 
+    const populatedAssignment = await buildAssignmentPopulate(
+      InventoryAssignment.findById(assignment._id)
+    );
+
     return res.status(200).json({
       message: "Inventory assignment status updated successfully",
-      assignment,
+      assignment: populatedAssignment,
     });
   } catch (error) {
     console.error("updateInventoryAssignmentStatus error:", error);
@@ -378,7 +430,9 @@ exports.deleteInventoryAssignment = async (req, res) => {
     }
 
     const filter = { _id: id };
-    if (req.user?.company) filter.company = req.user.company;
+    if (req.user?.company) {
+      filter.company = req.user.company;
+    }
 
     const assignment = await InventoryAssignment.findOne(filter);
 

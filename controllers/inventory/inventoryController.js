@@ -51,7 +51,7 @@ exports.createInventoryItem = async (req, res) => {
       });
     }
 
-    const finalCompany = req.user?.company || company;
+const finalCompany = req.user?.company?._id || req.user?.company || company;
     if (!finalCompany) {
       return res.status(400).json({
         message: "Company is required",

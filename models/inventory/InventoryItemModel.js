@@ -377,7 +377,7 @@ inventoryItemSchema.virtual("isLowStock").get(function () {
 // =========================
 // PRE SAVE
 // =========================
-inventoryItemSchema.pre("save", function (next) {
+inventoryItemSchema.pre("save", function () {
   if (this.inventoryCode) {
     this.inventoryCode = this.inventoryCode.trim().toUpperCase();
   }
@@ -398,8 +398,6 @@ inventoryItemSchema.pre("save", function (next) {
   if (this.quantity <= this.minStockLevel && this.category !== "extinguisher") {
     this.status = "low_stock";
   }
-
-  next();
 });
 
 // =========================

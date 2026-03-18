@@ -5,13 +5,13 @@ const userSchema = new mongoose.Schema(
     firstName: {
       type: String,
       required: true,
-      trim: true
+      trim: true,
     },
 
     lastName: {
       type: String,
       required: true,
-      trim: true
+      trim: true,
     },
 
     email: {
@@ -19,34 +19,35 @@ const userSchema = new mongoose.Schema(
       required: true,
       unique: true,
       lowercase: true,
-      trim: true
+      trim: true,
     },
-        company: {
+
+    company: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Company",
-      required: false
+      required: false,
     },
 
     password: {
       type: String,
       required: true,
-      select: false //  ne retourne pas le password par défaut
+      select: false,
     },
 
     role: {
       type: String,
-      enum: ["agent", "manager", "admin" , "superAdmin"],
-      default: "agent"
-    }
+      enum: ["agent", "manager", "admin", "supervisor", "superAdmin"],
+      default: "agent",
+    },
   },
   {
     timestamps: true,
     toJSON: { virtuals: true },
-    toObject: { virtuals: true }
+    toObject: { virtuals: true },
   }
 );
 
-//  Virtual Full Name
+// Virtual Full Name
 userSchema.virtual("fullName").get(function () {
   return `${this.firstName} ${this.lastName}`;
 });

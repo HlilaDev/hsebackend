@@ -1,4 +1,3 @@
-// models/employeeModel.js
 const mongoose = require("mongoose");
 
 const employeeSchema = new mongoose.Schema(
@@ -11,14 +10,14 @@ const employeeSchema = new mongoose.Schema(
 
     employeeId: {
       type: String,
-      unique: true, // matricule
-      sparse: true, // permet null sans conflit
+      unique: true,
+      sparse: true,
       trim: true,
     },
 
     department: {
       type: String,
-      trim: true, // ex: Production, Maintenance, HSE
+      trim: true,
     },
 
     company: {
@@ -29,7 +28,7 @@ const employeeSchema = new mongoose.Schema(
 
     jobTitle: {
       type: String,
-      trim: true, // ex: Soudeur, Cariste...
+      trim: true,
     },
 
     zone: {
@@ -58,16 +57,39 @@ const employeeSchema = new mongoose.Schema(
   }
 );
 
-// Index utiles
+// Index
 employeeSchema.index({ fullName: 1 });
 employeeSchema.index({ department: 1 });
 employeeSchema.index({ company: 1 });
 
-// Virtual: récupère les trainings liés via Training.participants.employee
+// Trainings liés
 employeeSchema.virtual("trainings", {
   ref: "Training",
   localField: "_id",
   foreignField: "participants.employee",
+});
+
+// Toutes les affectations d’inventaire
+employeeSchema.virtual("inventoryAssignments", {
+  ref: "InventoryAssignment",
+  localField: "_id",
+  foreignField: "employee",
+  options: {
+    sort: { assignedAt: -1 },
+  },
+});
+
+// Seulement les affectations en cours
+employeeSchema.virtual("activeInventoryAssignments", {
+  ref: "InventoryAssignment",
+  localField: "_id",
+  foreignField: "employee",
+  match: {
+    status: { $in: ["active", "overdue"] },
+  },
+  options: {
+    sort: { assignedAt: -1 },
+  },
 });
 
 module.exports = mongoose.model("Employee", employeeSchema);

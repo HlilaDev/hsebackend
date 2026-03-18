@@ -59,15 +59,33 @@ async function createNotificationForUsers({
 async function getRecipientsForDevice(device) {
   if (!device.company) return [];
 
+  const companyId = device.company?._id || device.company;
+
   const users = await User.find({
-    company: device.company,
-    role: { $in: ["admin", "hseManager"] },
+    company: companyId,
+    role: { $in: ["admin", "manager"] },
   }).select("_id");
 
   return users.map((u) => u._id);
 }
 
-async function markDeviceOnline(deviceId) {
+async function resolveOfflineNotifications(device) {
+  await Notification.updateMany(
+    {
+      device: device._id,
+      action: "offline",
+      "meta.resolved": { $ne: true },
+    },
+    {
+      $set: {
+        "meta.resolved": true,
+        "meta.resolvedAt": new Date(),
+      },
+    }
+  );
+}
+
+async function markDeviceOnline(deviceId, extraData = {}) {
   const existingDevice = await Device.findOne({ deviceId })
     .populate("zone", "_id name")
     .populate("company", "_id name");
@@ -76,11 +94,46 @@ async function markDeviceOnline(deviceId) {
 
   const wasOffline = existingDevice.status === "offline";
 
-  existingDevice.status = "online";
-  existingDevice.lastSeen = new Date();
+  existingDevice.status = extraData.status || "online";
+  existingDevice.lastSeen = extraData.lastSeen || new Date();
+
+  if (extraData.ipAddress !== undefined) {
+    existingDevice.ipAddress = extraData.ipAddress;
+  }
+
+  if (extraData.macAddress !== undefined) {
+    existingDevice.macAddress = extraData.macAddress;
+  }
+
+  if (extraData.firmware !== undefined) {
+    existingDevice.firmware = extraData.firmware;
+  }
+
+  if (extraData.uptime !== undefined) {
+    existingDevice.uptime = extraData.uptime;
+  }
+
+  if (extraData.memoryUsage !== undefined) {
+    existingDevice.memoryUsage = extraData.memoryUsage;
+  }
+
+  if (extraData.cpuTemp !== undefined) {
+    existingDevice.cpuTemp = extraData.cpuTemp;
+  }
+
+  if (extraData.networkType !== undefined) {
+    existingDevice.networkType = extraData.networkType;
+  }
+
+  if (extraData.signal !== undefined) {
+    existingDevice.signal = extraData.signal;
+  }
+
   await existingDevice.save();
 
   if (wasOffline) {
+    await resolveOfflineNotifications(existingDevice);
+
     const userIds = await getRecipientsForDevice(existingDevice);
 
     await createNotificationForUsers({
@@ -108,6 +161,14 @@ async function markDeviceOnline(deviceId) {
         status: existingDevice.status,
         lastSeen: existingDevice.lastSeen,
         zone: existingDevice.zone,
+        ipAddress: existingDevice.ipAddress || "",
+        macAddress: existingDevice.macAddress || "",
+        firmware: existingDevice.firmware || "",
+        uptime: existingDevice.uptime || 0,
+        memoryUsage: existingDevice.memoryUsage || 0,
+        cpuTemp: existingDevice.cpuTemp || 0,
+        networkType: existingDevice.networkType || "",
+        signal: existingDevice.signal || 0,
       });
     }
   }
@@ -168,6 +229,14 @@ async function checkOfflineDevices() {
             status: "offline",
             lastSeen: device.lastSeen,
             zone: device.zone,
+            ipAddress: device.ipAddress || "",
+            macAddress: device.macAddress || "",
+            firmware: device.firmware || "",
+            uptime: device.uptime || 0,
+            memoryUsage: device.memoryUsage || 0,
+            cpuTemp: device.cpuTemp || 0,
+            networkType: device.networkType || "",
+            signal: device.signal || 0,
           });
         }
       }

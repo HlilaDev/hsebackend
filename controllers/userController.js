@@ -11,18 +11,19 @@ const pick = (obj, keys) => {
   return out;
 };
 
+// helper: extract company id safely
+const extractCompanyId = (value) => {
+  if (!value) return "";
+  if (typeof value === "object") {
+    if (value._id) return String(value._id);
+    if (value.id) return String(value.id);
+  }
+  return String(value);
+};
+
 // helper: compare company ids safely
 const sameCompany = (a, b) => {
-  const extractId = (value) => {
-    if (!value) return "";
-    if (typeof value === "object") {
-      if (value._id) return String(value._id);
-      if (value.id) return String(value.id);
-    }
-    return String(value);
-  };
-
-  return extractId(a) === extractId(b);
+  return extractCompanyId(a) === extractCompanyId(b);
 };
 
 // helper: sanitize returned user
@@ -31,6 +32,9 @@ const getSafeUserById = async (id) => {
     .select("-password")
     .populate("company", "_id name industry");
 };
+
+const ADMIN_MANAGED_ROLES = ["supervisor", "manager", "agent"];
+const SUPERVISOR_TEAM_ROLES = ["manager", "agent"];
 
 // CREATE USER
 exports.createUser = async (req, res) => {
@@ -84,7 +88,7 @@ exports.createUser = async (req, res) => {
       companyToAssign = companyExists._id;
     }
 
-    // admin => can create only manager / agent in same company
+    // admin => can create only supervisor / manager / agent in same company
     else if (req.user.role === "admin") {
       if (!req.user.company) {
         return res.status(400).json({
@@ -92,16 +96,13 @@ exports.createUser = async (req, res) => {
         });
       }
 
-      if (!["manager", "agent"].includes(role)) {
+      if (!ADMIN_MANAGED_ROLES.includes(role)) {
         return res.status(403).json({
-          message: "Admin can only create manager or agent accounts",
+          message: "Admin can only create supervisor, manager or agent accounts",
         });
       }
 
-      const adminCompanyId =
-        typeof req.user.company === "object" && req.user.company._id
-          ? req.user.company._id
-          : req.user.company;
+      const adminCompanyId = extractCompanyId(req.user.company);
 
       const companyExists = await Company.findById(adminCompanyId);
       if (!companyExists) {
@@ -113,7 +114,7 @@ exports.createUser = async (req, res) => {
       companyToAssign = adminCompanyId;
     }
 
-    // manager / agent => cannot create users
+    // supervisor / manager / agent => cannot create users
     else {
       return res.status(403).json({
         message: "You are not allowed to create users",
@@ -163,11 +164,7 @@ exports.getUsers = async (req, res) => {
         });
       }
 
-      const adminCompanyId =
-        typeof req.user.company === "object" && req.user.company._id
-          ? req.user.company._id
-          : req.user.company;
-
+      const adminCompanyId = extractCompanyId(req.user.company);
       filter = { company: adminCompanyId };
     } else {
       return res.status(403).json({
@@ -224,12 +221,89 @@ exports.getUserById = async (req, res) => {
       return res.status(200).json(user);
     }
 
+    if (req.user.role === "supervisor") {
+      if (!req.user.company) {
+        return res.status(400).json({
+          message: "Connected supervisor is not linked to any company",
+        });
+      }
+
+      if (!sameCompany(user.company, req.user.company)) {
+        return res.status(403).json({
+          message: "Access denied: user does not belong to your company",
+        });
+      }
+
+      if (!SUPERVISOR_TEAM_ROLES.includes(user.role)) {
+        return res.status(403).json({
+          message: "Supervisor can only view manager or agent accounts",
+        });
+      }
+
+      return res.status(200).json(user);
+    }
+
     return res.status(403).json({
       message: "You are not allowed to view this user",
     });
   } catch (error) {
     res.status(500).json({
       message: "Get user failed",
+      error: error.message,
+    });
+  }
+};
+
+// GET TEAM FOR SUPERVISOR
+exports.getTeam = async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    if (!req.user.company) {
+      return res.status(400).json({
+        message: "Connected user is not linked to any company",
+      });
+    }
+
+    const companyId =
+      typeof req.user.company === "object" && req.user.company._id
+        ? req.user.company._id
+        : req.user.company;
+
+    let allowedRoles = [];
+
+    if (req.user.role === "supervisor") {
+      allowedRoles = ["manager", "agent"];
+    } else if (req.user.role === "manager") {
+      allowedRoles = ["agent"];
+    } else if (req.user.role === "admin") {
+      allowedRoles = ["supervisor", "manager", "agent"];
+    } else if (req.user.role === "superAdmin") {
+      allowedRoles = ["admin", "supervisor", "manager", "agent"];
+    } else {
+      return res.status(403).json({
+        message: "You are not allowed to access team members",
+      });
+    }
+
+    const team = await User.find({
+      company: companyId,
+      role: { $in: allowedRoles },
+    })
+      .select("-password")
+      .populate("company", "_id name industry")
+      .sort({ role: 1, createdAt: -1 });
+
+    return res.status(200).json({
+      message: "Team fetched successfully",
+      items: team,
+      count: team.length,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Get team failed",
       error: error.message,
     });
   }
@@ -265,9 +339,10 @@ exports.updateUser = async (req, res) => {
         });
       }
 
-      if (!["manager", "agent"].includes(existingUser.role)) {
+      if (!ADMIN_MANAGED_ROLES.includes(existingUser.role)) {
         return res.status(403).json({
-          message: "Admin can only update manager or agent accounts",
+          message:
+            "Admin can only update supervisor, manager or agent accounts",
         });
       }
     } else {
@@ -316,7 +391,7 @@ exports.updateUser = async (req, res) => {
 
     if (updates.role !== undefined) {
       if (req.user.role === "superAdmin") {
-        if (!["admin", "manager", "agent"].includes(updates.role)) {
+        if (!["admin", "supervisor", "manager", "agent"].includes(updates.role)) {
           return res.status(403).json({
             message: "Invalid target role",
           });
@@ -324,9 +399,9 @@ exports.updateUser = async (req, res) => {
       }
 
       if (req.user.role === "admin") {
-        if (!["manager", "agent"].includes(updates.role)) {
+        if (!ADMIN_MANAGED_ROLES.includes(updates.role)) {
           return res.status(403).json({
-            message: "Admin can only assign manager or agent roles",
+            message: "Admin can only assign supervisor, manager or agent roles",
           });
         }
       }
@@ -404,9 +479,10 @@ exports.deleteUser = async (req, res) => {
         });
       }
 
-      if (!["manager", "agent"].includes(user.role)) {
+      if (!ADMIN_MANAGED_ROLES.includes(user.role)) {
         return res.status(403).json({
-          message: "Admin can only delete manager or agent accounts",
+          message:
+            "Admin can only delete supervisor, manager or agent accounts",
         });
       }
 

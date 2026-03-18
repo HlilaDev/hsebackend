@@ -19,10 +19,11 @@ const notificationRoutes = require('./notificationRoutes');
 const useNotificationRoutes = require('./userNotificationRoutes');
 const companyRoutes = require("./companyRoutes");
 const inventoryRoutes = require("./inventory");
+const displayMessageRoutes = require("./displayMessageRoutes");
 
 
 
-
+router.use("/display-messages", displayMessageRoutes);
 router.use("/companies", companyRoutes);
 router.use("/users", userRoutes);
 router.use("/auth", authRoutes);

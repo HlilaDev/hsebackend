@@ -36,6 +36,12 @@ const ObservationSchema = new mongoose.Schema(
       required: true,
     },
 
+    company: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Company",
+      required: true,
+    },
+
     images: [
       {
         url: String,

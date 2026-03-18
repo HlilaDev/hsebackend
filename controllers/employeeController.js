@@ -111,7 +111,29 @@ exports.getEmployeeById = async (req, res) => {
     })
       .populate("zone")
       .populate("company", "name industry")
-      .populate("trainings");
+      .populate("trainings")
+      .populate({
+        path: "activeInventoryAssignments",
+        populate: [
+          {
+            path: "inventoryItem",
+            select:
+              "name category subCategory inventoryCode status condition unit imageUrl quantity",
+          },
+          {
+            path: "zone",
+            select: "name",
+          },
+          {
+            path: "assignedBy",
+            select: "firstName lastName email",
+          },
+          {
+            path: "returnedBy",
+            select: "firstName lastName email",
+          },
+        ],
+      });
 
     if (!doc) {
       return res.status(404).json({ message: "Employee not found" });

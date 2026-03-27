@@ -2,26 +2,26 @@ const express = require("express");
 const router = express.Router();
 
 const {
-  createDisplayMessage,
-  getDisplayMessages,
-  getDisplayMessageById,
-  updateDisplayMessage,
-  deleteDisplayMessage,
-  publishDisplayMessage,
-  cancelDisplayMessage,
-} = require("../controllers/displayMessageController");
+  createUser,
+  getUsers,
+  getUserById,
+  getTeam,
+  updateUser,
+  deleteUser,
+} = require("../controllers/userController");
 
 const { protect } = require("../middlewares/protect");
-const authorizeRoles = require("../middlewares/authorizeRoles");
 
-router.get("/", protect, getDisplayMessages);
-router.get("/:id", protect, getDisplayMessageById);
+// IMPORTANT:
+// mettre /team AVANT /:id
+// sinon "team" sera capturé comme un id
+router.get("/team", protect, getTeam);
 
-router.post("/", protect, authorizeRoles("manager", "supervisor"), createDisplayMessage);
-router.put("/:id", protect, authorizeRoles("manager", "supervisor"), updateDisplayMessage);
-router.delete("/:id", protect, authorizeRoles("manager", "supervisor"), deleteDisplayMessage);
+router.get("/", protect, getUsers);
+router.get("/:id", protect, getUserById);
 
-router.patch("/:id/publish", protect, authorizeRoles("manager", "supervisor"), publishDisplayMessage);
-router.patch("/:id/cancel", protect, authorizeRoles("manager", "supervisor"), cancelDisplayMessage);
+router.post("/", protect, createUser);
+router.put("/:id", protect, updateUser);
+router.delete("/:id", protect, deleteUser);
 
 module.exports = router;

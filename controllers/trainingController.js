@@ -32,7 +32,7 @@ exports.createTraining = async (req, res) => {
 
     const populated = await Training.findById(doc._id)
       .populate("company", "name")
-      .populate("createdBy", "name email role")
+      .populate("createdBy", "firstName lastName role")
       .populate("participants.employee", "fullName employeeId department jobTitle");
 
     return res.status(201).json(populated);
@@ -99,7 +99,7 @@ exports.listTrainings = async (req, res) => {
     const [items, total] = await Promise.all([
       Training.find(filter)
         .populate("company", "name")
-        .populate("createdBy", "name email role")
+        .populate("createdBy", "firstName lastName email role")
         .populate("participants.employee", "fullName employeeId department jobTitle")
         .sort(sort)
         .skip(skip)
@@ -132,7 +132,7 @@ exports.getTrainingById = async (req, res) => {
       company: req.user.company,
     })
       .populate("company", "name")
-      .populate("createdBy", "name email role")
+      .populate("createdBy", "firstName lastName email role")
       .populate("participants.employee", "fullName employeeId department jobTitle");
 
     if (!doc) {
@@ -178,7 +178,7 @@ exports.updateTraining = async (req, res) => {
       runValidators: true,
     })
       .populate("company", "name")
-      .populate("createdBy", "name email role")
+      .populate("createdBy", "firstName lastName email role")
       .populate("participants.employee", "fullName employeeId department jobTitle");
 
     return res.json(doc);
@@ -239,7 +239,7 @@ exports.addParticipant = async (req, res) => {
       { new: true, runValidators: true }
     )
       .populate("company", "name")
-      .populate("createdBy", "name email role")
+      .populate("createdBy", "firstName lastName email role")
       .populate("participants.employee", "fullName employeeId department jobTitle");
 
     return res.json(doc);
@@ -287,7 +287,7 @@ exports.updateParticipant = async (req, res) => {
       { new: true, runValidators: true }
     )
       .populate("company", "name")
-      .populate("createdBy", "name email role")
+      .populate("createdBy", "firstName lastName email role")
       .populate("participants.employee", "fullName employeeId department jobTitle");
 
     if (!doc) {
@@ -323,7 +323,7 @@ exports.removeParticipant = async (req, res) => {
       { new: true }
     )
       .populate("company", "name")
-      .populate("createdBy", "name email role")
+      .populate("createdBy", "firstName lastName email role")
       .populate("participants.employee", "fullName employeeId department jobTitle");
 
     return res.json(doc);

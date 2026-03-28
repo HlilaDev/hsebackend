@@ -7,14 +7,14 @@ const authorizeRoles = require("../middlewares/authorizeRoles");
 router.get(
   "/",
   protect,
-  authorizeRoles("admin", "manager", "agent"),
+  authorizeRoles("supervisor", "manager", "agent"),
   c.listTrainings
 );
 
 router.get(
   "/:id",
   protect,
-  authorizeRoles("admin", "manager", "agent"),
+  authorizeRoles("supervisor", "manager", "agent"),
   c.getTrainingById
 );
 
@@ -22,21 +22,21 @@ router.get(
 router.post(
   "/",
   protect,
-  authorizeRoles("admin", "manager"),
+  authorizeRoles( "manager"),
   c.createTraining
 );
 
 router.put(
   "/:id",
   protect,
-  authorizeRoles("admin", "manager"),
+  authorizeRoles( "manager", "agent"),
   c.updateTraining
 );
 
 router.delete(
   "/:id",
   protect,
-  authorizeRoles("admin", "manager"),
+  authorizeRoles( "manager"),
   c.deleteTraining
 );
 
@@ -44,21 +44,21 @@ router.delete(
 router.post(
   "/:id/participants",
   protect,
-  authorizeRoles("admin", "manager"),
+  authorizeRoles( "manager", "agent"),
   c.addParticipant
 );
 
 router.patch(
   "/:id/participants/:participantId",
   protect,
-  authorizeRoles("admin", "manager"),
+  authorizeRoles( "manager", "agent"),
   c.updateParticipant
 );
 
 router.delete(
   "/:id/participants/:participantId",
   protect,
-  authorizeRoles("admin", "manager"),
+  authorizeRoles( "manager"),
   c.removeParticipant
 );
 

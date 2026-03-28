@@ -1,6 +1,9 @@
 const Zone = require("../models/zoneModel");
 const Device = require("../models/deviceModel");
 const Company = require("../models/companyModel");
+const Employee = require("../models/employeeModel");
+const Sensor = require("../models/sensorModel");
+const Alert = require("../models/alertModel");
 
 function getUserCompanyId(req) {
   return req.user?.company?._id || req.user?.company || null;
@@ -107,8 +110,52 @@ exports.listZones = async (req, res) => {
       Zone.countDocuments(filter),
     ]);
 
+    const zoneIds = zones.map((z) => z._id);
+
+    const [employeeCounts, deviceCounts, sensorCounts, alertCounts] = await Promise.all([
+      Employee.aggregate([
+        { $match: { zone: { $in: zoneIds } } },
+        { $group: { _id: "$zone", count: { $sum: 1 } } },
+      ]),
+      Device.aggregate([
+        { $match: { zone: { $in: zoneIds } } },
+        { $group: { _id: "$zone", count: { $sum: 1 } } },
+      ]),
+      Sensor.aggregate([
+        { $match: { zone: { $in: zoneIds } } },
+        { $group: { _id: "$zone", count: { $sum: 1 } } },
+      ]),
+      Alert.aggregate([
+        { $match: { zone: { $in: zoneIds } } },
+        { $group: { _id: "$zone", count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const toMap = (items) =>
+      items.reduce((acc, item) => {
+        acc[String(item._id)] = item.count;
+        return acc;
+      }, {});
+
+    const employeeMap = toMap(employeeCounts);
+    const deviceMap = toMap(deviceCounts);
+    const sensorMap = toMap(sensorCounts);
+    const alertMap = toMap(alertCounts);
+
+    const items = zones.map((zone) => {
+      const id = String(zone._id);
+
+      return {
+        ...zone.toObject(),
+        employeesCount: employeeMap[id] || 0,
+        devicesCount: deviceMap[id] || 0,
+        sensorsCount: sensorMap[id] || 0,
+        alertsCount: alertMap[id] || 0,
+      };
+    });
+
     res.json({
-      items: zones,
+      items,
       total,
       page: pageNumber,
       pages: Math.ceil(total / limitNumber),

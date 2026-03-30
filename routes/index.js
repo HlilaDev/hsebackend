@@ -21,7 +21,7 @@ const companyRoutes = require("./companyRoutes");
 const inventoryRoutes = require("./inventory");
 const displayMessageRoutes = require("./displayMessageRoutes");
 const checklistRoutes = require("./checklistRoutes");
-
+const ppeAlertRoutes = require("./ppeAlertRoutes");
 
 
 router.use("/display-messages", displayMessageRoutes);
@@ -42,6 +42,10 @@ router.use("/alert-rules", alertRuleRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/user-notifications', useNotificationRoutes);
 router.use("/checklists", checklistRoutes);
+
+
+
+router.use("/ppe-alerts", ppeAlertRoutes);
 
 router.use("/sensors", sensorsRoutes);
 router.use("/sensor-data", sensorDataRoutes);

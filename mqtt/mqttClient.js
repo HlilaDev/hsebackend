@@ -15,6 +15,14 @@ client.on("connect", () => {
 
   client.subscribe("hsemonitor/devices/+/telemetry", { qos: 1 });
   client.subscribe("hsemonitor/devices/+/status", { qos: 1 });
+
+  client.subscribe("hsemonitor/devices/+/alerts/ppe", { qos: 1 }, (err) => {
+    if (err) {
+      console.error("❌ Subscribe PPE error:", err.message);
+    } else {
+      console.log("✅ Subscribed to hsemonitor/devices/+/alerts/ppe");
+    }
+  });
 });
 
 client.on("message", async (topic, payload, packet) => {

@@ -16,10 +16,30 @@ function computeScore(responses, totalItems) {
 // @access  Private (agent)
 exports.startChecklistExecution = async (req, res) => {
   try {
-    const { checklistId, zone, notes } = req.body;
+    const {
+      checklistId,
+      title,
+      inspectionType,
+      zone,
+      members,
+      observers,
+      approver,
+      scheduledAt,
+      dueDate,
+      priority,
+      riskLevel,
+      description,
+      notes,
+      relatedDevices,
+      startNow,
+    } = req.body;
 
     if (!checklistId) {
       return res.status(400).json({ message: "checklistId is required." });
+    }
+
+    if (!title || !title.trim()) {
+      return res.status(400).json({ message: "title is required." });
     }
 
     const template = await ChecklistTemplate.findOne({
@@ -34,12 +54,23 @@ exports.startChecklistExecution = async (req, res) => {
 
     const execution = await ChecklistExecution.create({
       checklist: template._id,
+      title: title.trim(),
+      inspectionType: inspectionType || "routine",
       agent: req.user._id,
       company: req.user.company,
       zone: zone || null,
-      status: "draft",
-      startedAt: new Date(),
+      members: Array.isArray(members) ? members : [],
+      observers: Array.isArray(observers) ? observers : [],
+      approver: approver || null,
+      scheduledAt: scheduledAt || null,
+      dueDate: dueDate || null,
+      priority: priority || "medium",
+      riskLevel: riskLevel || "low",
+      relatedDevices: Array.isArray(relatedDevices) ? relatedDevices : [],
+      description: description?.trim() || "",
       notes: notes?.trim() || "",
+      status: startNow ? "in_progress" : scheduledAt ? "scheduled" : "draft",
+      startedAt: startNow ? new Date() : null,
     });
 
     res.status(201).json({
